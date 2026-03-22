@@ -29,8 +29,8 @@ All scripts that send output to the user MUST send via Telegram Bot API directly
 import requests
 
 def send_to_telegram(message):
-    bot_token = "8651816494:AAF94nqRpcE_4m_uPxjmYn8BJM-CbeCuctc"
-    chat_id = "859154003"
+    bot_token = get_bot_token_from_openclaw_config()
+    chat_id = get_chat_id_from_openclaw_config()
     try:
         requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
