@@ -1,6 +1,6 @@
 ---
 name: track-expense
-description: Track expenses to Notion database with receipt uploads. You have vision capability. Always use it to extract transaction details directly from receipt images. Never claim you cannot read images.
+description: Track expenses to Notion database with receipt uploads. Use vision capability to extract transaction details directly from receipt images. Do not ask for details visible in the image.
 homepage: https://github.com/openclaw/openclaw
 metadata:
   {
@@ -19,6 +19,7 @@ Log expenses directly to the Notion expenses database using curl. Do NOT ask for
 ## Behavior
 Receipt image sent → use image analysis to extract amount, merchant, date, description directly → log immediately, no confirmation
 After logging, show extracted details and ask: 'Does this look right? Reply to correct any details.'
+If image is not a receipt, respond briefly with what you can see and ask if they want to log manually.
 
 ## Database ID
 `31e78b9e-154e-803b-b738-c21b57163bf5`
