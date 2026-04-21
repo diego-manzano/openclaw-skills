@@ -1,5 +1,7 @@
 # Script Manager Skill
 
+> **Database IDs**: `<HABITS_DB_ID>`, `<EXPENSE_DB_ID_ALT>` — look up the real values in `TOOLS.md` → *Notion Databases* and substitute before running any curl.
+
 ## Purpose
 Create, edit, and manage Python scripts in the OpenClaw workspace at `/root/.openclaw/workspace/`. Use this skill when the user asks to create, fix, update, or run scripts.
 
@@ -102,8 +104,8 @@ Content-Type: application/json
 Notion-Version: 2022-06-28
 ```
 
-Habits DB ID: `30a78b9e154e80dc9eb8db0379360547`
-Expenses DB ID: `31e78b9e-154e-8049-892f-d1e49afbc961`
+Habits DB ID: `<HABITS_DB_ID>`
+Expenses DB ID: `<EXPENSE_DB_ID_ALT>`
 
 Filter by a date property, NOT by `Created at` — that only returns habits created today not habits for today.
 
