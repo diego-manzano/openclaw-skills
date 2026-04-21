@@ -59,18 +59,19 @@ UPLOAD=$(curl -s -X POST "https://api.notion.com/v1/file_uploads" \
 UPLOAD_URL=$(echo $UPLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'])")
 UPLOAD_ID=$(echo $UPLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
-# Send the file
-curl -s -X POST "$UPLOAD_URL" \
+# Send the file - MUST use multipart form (-F), NOT --data-binary
+# Also MUST include Notion-Version header on the upload POST
+curl -sfS -X POST "$UPLOAD_URL" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
-  -F "file=@<local_file_path>"
+  -F "file=@<local_file_path>;type=image/jpeg"
 
 # Attach to the page
 curl -s -X PATCH "https://api.notion.com/v1/pages/<page_id>" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json" \
-  -d "{\"properties\": {\"file\": {\"files\": [{\"type\": \"file_upload\", \"file_upload\": {\"id\": \"$UPLOAD_ID\"}}]}}}"
+  -d "{\"properties\": {\"File\": {\"files\": [{\"type\": \"file_upload\", \"name\": \"receipt.jpg\", \"file_upload\": {\"id\": \"$UPLOAD_ID\"}}]}}}"
 ```
 
 ## Categories
