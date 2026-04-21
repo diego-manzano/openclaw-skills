@@ -16,13 +16,17 @@ metadata:
 
 Log expenses directly to the Notion expenses database using curl. Do NOT ask for confirmation. Read the context, extract the details, and run the curl command immediately.
 
+## Database IDs
+
+Look up `<EXPENSE_DB_ID>` in `TOOLS.md` → *Notion Databases* and substitute it into every curl command below before running. Do not commit the real ID to this file.
+
 ## Behavior
 Receipt image sent → use image analysis to extract amount, merchant, date, description directly → log immediately, no confirmation
 After logging, show extracted details and ask: 'Does this look right? Reply to correct any details.'
 If image is not a receipt, respond briefly with what you can see and ask if they want to log manually.
 
 ## Database ID
-`31e78b9e-154e-803b-b738-c21b57163bf5`
+`<EXPENSE_DB_ID>`
 
 ## Step 1 — Create the expense entry
 ```bash
@@ -33,7 +37,7 @@ curl -s -X POST "https://api.notion.com/v1/pages" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json" \
   -d '{
-    "parent": { "database_id": "31e78b9e-154e-803b-b738-c21b57163bf5" },
+    "parent": { "database_id": "<EXPENSE_DB_ID>" },
     "properties": {
       "Description": { "title": [{ "text": { "content": "<description>" } }] },
       "Amount": { "number": <amount> },
@@ -88,7 +92,7 @@ set -euo pipefail
 NOTION_KEY=$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))['skills']['entries']['notion']['apiKey'])")
 
 payload='{
-  "parent": {"database_id": "31e78b9e-154e-803b-b738-c21b57163bf5"},
+  "parent": {"database_id": "<EXPENSE_DB_ID>"},
   "properties": { ... }
 }'
 
@@ -102,7 +106,7 @@ page_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$c
 [ -n "$page_id" ] || { echo "Failed to create expense" >&2; exit 1; }
 
 # optional: confirm it landed
-curl -sfS -X POST "https://api.notion.com/v1/databases/31e78b9e-154e-803b-b738-c21b57163bf5/query" \
+curl -sfS -X POST "https://api.notion.com/v1/databases/<EXPENSE_DB_ID>/query" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json" \
