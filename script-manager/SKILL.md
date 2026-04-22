@@ -126,13 +126,13 @@ openclaw cron add \
   --cron "30 9 * * *" \
   --tz "Asia/Manila" \
   --session main \
-  --system-event "python3 /root/.openclaw/workspace/morning-digest.py"
+  --system-event "python3 /root/.openclaw/workspace/scripts/morning-digest.py"
 ```
 
 ## Script Locations
 
-- Morning digest: `/root/.openclaw/workspace/morning-digest.py`
-- AI news fetcher: `/root/.openclaw/workspace/ai-news-fetcher.py`
+- Morning digest: `/root/.openclaw/workspace/scripts/morning-digest.py`
+- AI news fetcher: `/root/.openclaw/workspace/scripts/ai-news-fetcher.py`
 - Any new scripts: `/root/.openclaw/workspace/`
 
 ## Testing Scripts
