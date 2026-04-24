@@ -1,6 +1,6 @@
 ---
 name: calendar-read
-description: Query Google Calendar (or any iCalendar feed) read-only via a secret iCal URL. Use for "what is on my schedule today/this week", "next meeting", search upcoming events by keyword. No OAuth — uses Google Calendar secret iCal URL stored in env.
+description: Read the user's Google Calendar via the secret iCal URL. Use for "what is on my schedule today/this week", "next meeting", searching upcoming events by keyword. Read-only, no OAuth.
 homepage: https://github.com/waldbaer/icalendar-events-cli
 metadata:
   {
@@ -14,35 +14,27 @@ metadata:
 
 # calendar-read
 
-Read-only access to the user's Google calendar(s) via secret iCal URLs. No OAuth, no write.
+Read-only calendar access via Google Calendar secret iCal URL stored in `$GCAL_PERSONAL_ICAL`.
 
-## Calendars available
+## Behavior rules
 
-The user has two calendars, each with its own secret iCal URL stored in env vars:
-
-- `$GCAL_PERSONAL_ICAL` — personal calendar
-- `$GCAL_WORK_ICAL` — work calendar
-
-**Default behavior**: query BOTH unless the user specifies one. For "meetings", "what do I have", etc., run the CLI twice (once per URL) and merge results before replying.
-
-## Behavior
-
-- Run the CLI, parse JSON, summarize events in plain language. Do not dump raw JSON to the user.
-- Return events ordered by start time.
-- Show: summary, start time (in PHT/Asia/Manila by default), duration, location (if any).
-- If the user asks something vague ("what's my day look like"), default to today 00:00 → 23:59 local time.
-- For week/multi-day queries, group by date.
+- Run the CLI, parse the JSON, summarize events in plain language. Do NOT dump raw JSON to the user.
+- Order events by start time.
+- Display times in **Asia/Manila (PHT)** — that's the user's timezone. If the JSON already has `+08:00` offsets, just reformat to a human-readable clock.
+- For vague queries ("what's my day", "am I busy"), default to today 00:00 → 23:59 local.
+- For multi-day queries, group output by date.
+- If the CLI returns no events for the range, reply clearly: "Nothing on your calendar [date/range]."
 
 ## Common queries
 
-### Today's events
+### Today
 ```bash
 TODAY=$(date -u +%Y-%m-%d)
 icalendar-events-cli --calendar.url "$GCAL_PERSONAL_ICAL" \
   -s "$TODAY" -e "$TODAY" --output.format json
 ```
 
-### Next 7 days
+### Next N days (week ahead)
 ```bash
 START=$(date -u +%Y-%m-%d)
 END=$(date -u -d "+7 days" +%Y-%m-%d)
@@ -50,46 +42,47 @@ icalendar-events-cli --calendar.url "$GCAL_PERSONAL_ICAL" \
   -s "$START" -e "$END" --output.format json
 ```
 
-### Specific date (single day)
+### Specific date
 ```bash
-icalendar-events-cli --calendar.url "$GCAL_WORK_ICAL" \
+icalendar-events-cli --calendar.url "$GCAL_PERSONAL_ICAL" \
   -s "2026-04-25" -e "2026-04-25" --output.format json
 ```
 
-### Search by summary (keyword in title)
+### Search upcoming events by keyword (summary)
 ```bash
 icalendar-events-cli --calendar.url "$GCAL_PERSONAL_ICAL" \
   -s "$(date -u +%Y-%m-%d)" -e "$(date -u -d "+30 days" +%Y-%m-%d)" \
-  -f "standup" --output.format json
+  -f "keyword" --output.format json
 ```
-
-### Merge both calendars (work + personal)
-```bash
-(icalendar-events-cli --calendar.url "$GCAL_PERSONAL_ICAL" -s "$START" -e "$END" --output.format json
- icalendar-events-cli --calendar.url "$GCAL_WORK_ICAL"     -s "$START" -e "$END" --output.format json) \
-| jq -s 'add | sort_by(.start)'
-```
-
-## Date arithmetic tips
-
-Use GNU `date` for offsets: `date -u -d "+1 day" +%Y-%m-%d`, `date -u -d "next monday" +%Y-%m-%d`.
-For timezone-aware formatting: `TZ=Asia/Manila date`.
 
 ## JSON output shape
 
-Each event:
 ```json
 {
-  "summary": "Meeting title",
-  "start": "2026-04-25T09:00:00+08:00",
-  "end":   "2026-04-25T10:00:00+08:00",
-  "location": "Conference room / Zoom link / ...",
-  "description": "..."
+  "filter": { "start-date": "...", "end-date": "..." },
+  "events": [
+    {
+      "start-date": "2026-04-24T14:00:00+08:00",
+      "end-date":   "2026-04-24T23:00:00+08:00",
+      "summary":    "Event title",
+      "location":   "(optional)",
+      "description": "(optional)"
+    }
+  ]
 }
 ```
 
+Fields are **hyphenated** (`start-date`, `end-date`, `summary`) — note this when parsing with `jq`.
+
+## Date arithmetic
+
+- `date -u +%Y-%m-%d` — today (UTC)
+- `date -u -d "+N days" +%Y-%m-%d` — offset
+- `date -u -d "next monday" +%Y-%m-%d` — weekday alias
+- `TZ=Asia/Manila date` — format in local time when displaying to the user
+
 ## Constraints
 
-- **Read-only.** Cannot create, edit, or delete events via this skill. If asked to modify, tell the user it's outside scope.
-- **iCal feed refresh**: Google refreshes the public iCal feed approximately every few hours. Very recent event changes may not appear immediately.
-- **Reset URL on leak**: the URL is essentially a password. If ever leaked, the user can regenerate in Google Calendar settings.
+- **Read-only.** Cannot create, edit, or delete events. If asked to modify, say so and suggest Google Calendar directly.
+- **Freshness**: Google refreshes the iCal feed approximately every few hours. Very recent changes (within ~1 hr) may not appear.
+- **One calendar only**: personal. Work calendar is not wired (user does not need it at this time).
