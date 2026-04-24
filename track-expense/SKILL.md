@@ -1,6 +1,6 @@
 ---
 name: track-expense
-description: Track expenses to Notion database with receipt uploads. Use vision capability to extract transaction details directly from receipt images. Do not ask for details visible in the image.
+description: Log a single expense to the Notion expenses database via curl. Use when user shares a receipt image or types an expense. Extract amount, merchant, date, category, description directly. RUN THE CURL IMMEDIATELY. Do not ask for confirmation. Do not write a script file — call the curl inline via the exec tool.
 homepage: https://github.com/openclaw/openclaw
 metadata:
   {
@@ -14,33 +14,31 @@ metadata:
 
 # track-expense
 
-Log expenses directly to the Notion expenses database using curl. Do NOT ask for confirmation. Read the context, extract the details, and run the curl command immediately.
+Log one expense to Notion. One curl call. That is the entire skill.
 
-## Database IDs
+## Hard rules
 
-Look up `<EXPENSE_DB_ID>` in `TOOLS.md` → *Notion Databases* and substitute it into every curl command below before running. Do not commit the real ID to this file.
+- **Call `exec` with actual bash text**, not JSON structures, not a Python dict.
+- **Run the curl inline.** Do NOT write to a `.sh` file then execute it.
+- **One curl per expense.** No retries, no verification call, no second write.
+- **Do not confirm** before running. Extract from image/text, then fire.
 
-## Behavior
-Receipt image sent → use image analysis to extract amount, merchant, date, description directly → log immediately, no confirmation
-After logging, show extracted details and ask: 'Does this look right? Reply to correct any details.'
-If image is not a receipt, respond briefly with what you can see and ask if they want to log manually.
+## Step 1 — log the expense
 
-## Database ID
-`<EXPENSE_DB_ID>`
+Run this bash literally (substitute the five `<...>` fields from the receipt):
 
-## Step 1 — Create the expense entry
 ```bash
-NOTION_KEY=$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))['skills']['entries']['notion']['apiKey'])")
+NOTION_KEY=$(python3 -c "import json,os; print(json.load(open(os.path.expanduser(\"~/.openclaw/openclaw.json\")))[\"skills\"][\"entries\"][\"notion\"][\"apiKey\"])")
 
 curl -s -X POST "https://api.notion.com/v1/pages" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json" \
   -d '{
-    "parent": { "database_id": "<EXPENSE_DB_ID>" },
+    "parent": { "database_id": "31e78b9e-154e-803b-b738-c21b57163bf5" },
     "properties": {
       "Description": { "title": [{ "text": { "content": "<description>" } }] },
-      "Amount": { "number": <amount> },
+      "Amount": { "number": <amount_number> },
       "Date": { "date": { "start": "<YYYY-MM-DD>" } },
       "Category": { "select": { "name": "<category>" } },
       "Merchant": { "rich_text": [{ "text": { "content": "<merchant>" } }] }
@@ -48,25 +46,28 @@ curl -s -X POST "https://api.notion.com/v1/pages" \
   }'
 ```
 
-## Step 2 — Attach receipt image (if provided)
+Valid `<category>` values: `food`, `other`, `health and wellness`, `utilities`, `shopping`, `transport`.
+
+## Step 2 — attach receipt image (only if image was sent)
+
+Inbound images land at `/root/.openclaw/media/inbound/`. If the user sent an image, after Step 1 succeeds and you have the returned `page_id`:
+
 ```bash
-# Upload file to Notion
+# 2a. create an upload slot
 UPLOAD=$(curl -s -X POST "https://api.notion.com/v1/file_uploads" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
   -H "Content-Type: application/json")
+UPLOAD_URL=$(echo "$UPLOAD" | python3 -c "import json,sys;print(json.load(sys.stdin)[\"upload_url\"])")
+UPLOAD_ID=$(echo "$UPLOAD" | python3 -c "import json,sys;print(json.load(sys.stdin)[\"id\"])")
 
-UPLOAD_URL=$(echo $UPLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'])")
-UPLOAD_ID=$(echo $UPLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-
-# Send the file - MUST use multipart form (-F), NOT --data-binary
-# Also MUST include Notion-Version header on the upload POST
-curl -sfS -X POST "$UPLOAD_URL" \
+# 2b. send the file (use -F multipart, NOT --data-binary; include Notion-Version)
+curl -s -X POST "$UPLOAD_URL" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
   -F "file=@<local_file_path>;type=image/jpeg"
 
-# Attach to the page
+# 2c. attach to the page
 curl -s -X PATCH "https://api.notion.com/v1/pages/<page_id>" \
   -H "Authorization: Bearer $NOTION_KEY" \
   -H "Notion-Version: 2022-06-28" \
@@ -74,48 +75,9 @@ curl -s -X PATCH "https://api.notion.com/v1/pages/<page_id>" \
   -d "{\"properties\": {\"File\": {\"files\": [{\"type\": \"file_upload\", \"name\": \"receipt.jpg\", \"file_upload\": {\"id\": \"$UPLOAD_ID\"}}]}}}"
 ```
 
-## Categories
-`food`, `other`, `health and wellness`, `utilities`, `shopping`, `transport`
+## Step 3 — reply to user
 
-## Rules
-- Run curl immediately, no confirmation
-- Read receipt image to extract amount, merchant, category
-- If splitting, calculate share first
-- Multiple expenses = run curl multiple times
-- File path for inbound images: `/root/.openclaw/media/inbound/`
+After the curl returns 200, reply briefly with extracted details:
+`Logged ₱<amount> at <merchant> (<category>). Does that look right?`
 
-## Error handling & verification
-
-Wrap the curl workflow so failures are obvious and we always confirm the page exists:
-
-```bash
-set -euo pipefail
-NOTION_KEY=$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))['skills']['entries']['notion']['apiKey'])")
-
-payload='{
-  "parent": {"database_id": "<EXPENSE_DB_ID>"},
-  "properties": { ... }
-}'
-
-create_resp=$(curl -sfS -X POST "https://api.notion.com/v1/pages" \
-  -H "Authorization: Bearer $NOTION_KEY" \
-  -H "Notion-Version: 2022-06-28" \
-  -H "Content-Type: application/json" \
-  -d "$payload")
-
-page_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$create_resp")
-[ -n "$page_id" ] || { echo "Failed to create expense" >&2; exit 1; }
-
-# optional: confirm it landed
-curl -sfS -X POST "https://api.notion.com/v1/databases/<EXPENSE_DB_ID>/query" \
-  -H "Authorization: Bearer $NOTION_KEY" \
-  -H "Notion-Version: 2022-06-28" \
-  -H "Content-Type: application/json" \
-  -d '{"filter":{"property":"id","equals":"'$page_id'"}}' > /dev/null
-```
-
-Tips:
-- Use `-sfS` on curl so non-200 responses stop the script.
-- Capture stdout/stderr to a log (`tee logs/track-expense-$(date +%s).json`) when you need an audit trail.
-- If any file upload step fails, exit immediately so we don’t claim the receipt was logged when it wasn’t.
-```
+Nothing more. No confirmation loop.
